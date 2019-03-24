@@ -1,0 +1,572 @@
+<html>
+    <style>
+        #col
+        {
+            position: absolute;
+            left: 510px;
+            top: 10px;
+        }
+
+        #homeButton
+        {
+            position: absolute;
+            left: 10px;
+            top: 510px;
+        }
+
+        #clearButton
+        {
+            position: absolute;
+            left: 100px;
+            top: 510px;
+        }
+
+        #instructions
+        {
+            position: absolute;
+            left: 160px;
+            top: 510px;
+        }
+
+        #selection
+        {
+            position: absolute;
+            left: 510px;
+            top: 170px;
+        }
+
+        #clearSelection
+        {
+            position: absolute;
+            left: 510px;
+            top: 210px;
+        }
+
+    </style>
+    <script src = "https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.6.1/p5.js"></script>
+    <script src = "https://cdnjs.cloudflare.com/ajax/libs/mathjs/4.2.2/math.js"></script>
+
+    <script>
+         class Vector
+         {
+            constructor(x1, y1, z1, x2, y2, z2)
+            {
+                this.x1 = x1;
+                this.y1 = y1;
+                this.z1 = z1;
+                this.x2 = x2;
+                this.y2 = y2;
+                this.z2 = z2;
+            }
+
+            getStartPoint()
+            {
+                return [this.x1, this.y1, this.z1];
+            }
+
+            getEndPoint()
+            {
+                return [this.x2, this.y2, this.z2];
+            }
+
+            getLength()
+            {
+                return Math.sqrt(Math.pow((this.x2 - this.x1, 2)) + Math.pow(this.y2 - this.y1, 2) + Math.pow(this.z2 - this.z1, 2));
+            }
+         }
+
+
+
+        //NOTE: Distance from plane to camera: 434
+        const CANVAS_WIDTH = 500;
+        const CANVAS_HEIGHT = 500;
+        const ARROW_LENGTH = 100;
+        const ARROW_WIDTH = 3;
+        const X_ROT_START = -Math.PI/4;
+        const Y_ROT_START = -Math.PI/6;
+        const POINT_SIZE = 5;
+
+        var lines = [];
+
+        var shiftDown = false;
+
+        var currentPoint = null;
+
+        var selectionVector = null;
+
+        var points = [];//all the points placed
+
+        var vectorLength = 500;
+
+        var selectionIndex = null;
+
+        var xyVector = new Vector(0, 0, 0, 0, 0, vectorLength);
+        var xzVector = new Vector(0, 0, 0, 0, vectorLength, 0);
+        var yzVector = new Vector(0, 0, 0, vectorLength, 0, 0);
+
+        var xyVectorRot = [xyVector.getEndPoint()[0], xyVector.getEndPoint()[1], xyVector.getEndPoint()[2]];
+        var xzVectorRot = [xzVector.getEndPoint()[0], xzVector.getEndPoint()[1], xzVector.getEndPoint()[2]];
+        var yzVectorRot = [yzVector.getEndPoint()[0], yzVector.getEndPoint()[1], yzVector.getEndPoint()[2]];
+
+        var xyPlane = [xyVector.getEndPoint()[0], xyVector.getEndPoint()[1], xyVector.getEndPoint()[2], 0];
+        var xzPlane = [xzVector.getEndPoint()[0], xzVector.getEndPoint()[1], xzVector.getEndPoint()[2], 0];
+        var yzPlane = [yzVector.getEndPoint()[0], yzVector.getEndPoint()[1], yzVector.getEndPoint()[2], 0];
+
+        var x = null;//x point
+        var y = null;//y point
+        var z = null;//z point
+
+        var rotating = false;//true if the scene is being rotated
+        var hasAddedRotation = false;
+
+
+        var xRotation = 0;//amount of x rotation from current rotate
+        var yRotation = 0;//amount of y rotation from current rotate
+
+        var xRotPos = X_ROT_START;
+        var yRotPos = Y_ROT_START;
+
+        var lastPoint = null;
+
+        var xyVectorArray = [xyVector.getEndPoint()[0], xyVector.getEndPoint()[1], xyVector.getEndPoint()[2]];
+        var xzVectorArray = [xzVector.getEndPoint()[0], xzVector.getEndPoint()[1], xzVector.getEndPoint()[2]];
+        var yzVectorArray = [yzVector.getEndPoint()[0], yzVector.getEndPoint()[1], yzVector.getEndPoint()[2]];
+
+        function setup()
+        {
+            createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT, WEBGL);
+            background(255, 255, 255);
+            drawScene(Math.PI/6, Math.PI/6, Math.PI/6);
+        }
+
+
+
+        function draw()
+        {
+
+            ortho(-CANVAS_WIDTH / 2, CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2, CANVAS_HEIGHT / 2, 0, 10000);
+            //set rotation position so rotation isn't reset when restarting a drag
+            if(!rotating && !hasAddedRotation)
+            {
+                xRotPos += xRotation;
+                yRotPos -= yRotation;
+                hasAddedRotation = true;
+                xRotation = 0;
+                yRotation = 0;
+            }
+
+            var xRotMat = [[1, 0, 0], [0, Math.cos(xRotPos), -Math.sin(xRotPos)], [0, Math.sin(xRotPos), Math.cos(xRotPos)]];
+            var yRotMat = [[Math.cos(yRotPos), 0, Math.sin(yRotPos)], [0, 1, 0], [-Math.sin(yRotPos), 0, Math.cos(yRotPos)]];
+
+
+            drawScene(xRotation, yRotation, 0);
+        }
+
+        //Removes lines that relied on the point
+        function removeLines(point)
+        {
+            console.log('Removed Lines');
+            console.log(lines);
+            console.log(point);
+            console.log('Loop Start');
+            for(var rep = lines.length - 1; rep >= 0; rep--)
+            {
+                console.log(lines[rep]);
+                console.log('should equal');
+                console.log(point);
+                if(lines[rep][0] == point[0] && lines[rep][1] == point[1] && lines[rep][2] == point[2])
+                {
+                    console.log('Equal');
+                    if(rep % 2 == 1)
+                    {
+                        lines.splice(rep - 1, 2);
+                        rep--;
+                    }
+                    else
+                    {
+                        lines.splice(rep, 2);
+                    }
+                }
+            }
+            console.log('Loop End');
+            console.log(lines);
+        }
+
+        function drawScene(xRot, yRot, zRot)
+        {
+
+
+            clear();
+            background(255, 255, 255);
+            noStroke();
+
+
+            var finalXRotation = yRotPos -yRot; //the x rotation of the scene, to limit rotation extent
+
+            if(finalXRotation < -HALF_PI)
+            {
+                finalXRotation = -HALF_PI;
+                yRotPos = -HALF_PI;
+            }
+            else if(finalXRotation > HALF_PI)
+            {
+                finalXRotation = HALF_PI;
+                yRotPos = HALF_PI;
+            }
+
+
+            rotateX(finalXRotation);//set to current rotate position plus change in y
+            rotateY(xRotPos + xRot);//set to current rotate position plus change in x
+
+            drawOriginComponents();
+
+            drawPoints();
+
+            drawLines();
+        }
+
+        function drawLines()
+        {
+
+            for(var rep = 0; rep < lines.length; rep += 2)
+            {
+                strokeWeight(3);
+                stroke(0);
+
+                beginShape(LINES);
+
+                vertex(lines[rep][0], lines[rep][1], lines[rep][2]);
+
+                vertex(lines[rep + 1][0], lines[rep + 1][1], lines[rep + 1][2]);
+
+                endShape();
+                //line(lines[rep][0], lines[rep][1], lines[rep][2], lines[rep + 1][0], lines[rep + 1][1], lines[rep + 1][2]);
+                //stroke(0);
+            }
+        }
+
+        function drawOriginComponents()
+        {
+            rotate(Math.PI);
+            ambientMaterial(0, 170, 255, 200);
+            plane(CANVAS_WIDTH * .6, CANVAS_HEIGHT * .6);//xz plane
+
+            //Y Arrow
+            ambientMaterial(0, 255, 0);
+            translate(0, ARROW_LENGTH/2, 0);
+            cylinder(ARROW_WIDTH, ARROW_LENGTH);
+            translate(0, ARROW_LENGTH/2, 0);
+            cone(ARROW_WIDTH, ARROW_LENGTH / 4);
+            translate(0, -ARROW_LENGTH, 0);
+
+            ambientMaterial(0, 170, 255, 200);
+            rotateX(HALF_PI);
+            xyPlane = plane(CANVAS_WIDTH * .6, CANVAS_HEIGHT * .6);//xy plane
+
+            //Z arrow
+            ambientMaterial(255, 255, 0);
+            translate(0, ARROW_LENGTH/2, 0);
+            cylinder(ARROW_WIDTH, ARROW_LENGTH);
+            translate(0, ARROW_LENGTH/2, 0);
+            cone(ARROW_WIDTH, ARROW_LENGTH / 4);
+            translate(0, -ARROW_LENGTH, 0);
+
+            ambientMaterial(0, 170, 255, 200);
+            rotateY(HALF_PI);
+            yzPlane = plane(CANVAS_WIDTH * .6, CANVAS_HEIGHT * .6);//yz plane
+
+            //X arrow
+            rotateX(3*Math.PI/2);
+            ambientMaterial(255, 0, 0);
+            translate(0, ARROW_LENGTH/2, 0);
+            cylinder(ARROW_WIDTH, ARROW_LENGTH);
+            translate(0, ARROW_LENGTH/2, 0);
+            cone(ARROW_WIDTH, ARROW_LENGTH / 4);
+            translate(0, -ARROW_LENGTH, 0);
+        }
+
+        function distance(point1, point2)
+        {
+            return Math.sqrt(Math.pow(point2[0] - point1[0], 2) + Math.pow(point2[1] - point1[1], 2) + Math.pow(point2[2] - point1[2], 2));
+        }
+
+        function mousePressed()
+        {
+            var xyPlane = [xyVectorRot[0], xyVectorRot[1], xyVectorRot[2], 0];
+            var xzPlane = [xzVectorRot[0], xzVectorRot[1], xzVectorRot[2], 0];
+            var yzPlane = [yzVectorRot[0], yzVectorRot[1], yzVectorRot[2], 0];
+
+
+            var xRotMat = [[1, 0, 0], [0, Math.cos(xRotPos), -Math.sin(xRotPos)], [0, Math.sin(xRotPos), Math.cos(xRotPos)]];
+            var yRotMat = [[Math.cos(-yRotPos), 0, Math.sin(-yRotPos)], [0, 1, 0], [-Math.sin(-yRotPos), 0, Math.cos(-yRotPos)]];
+
+
+
+            if(mouseButton == CENTER)
+            {
+                lastPoint = [mouseX, mouseY];
+            }
+            else if(mouseButton == LEFT && mouseX < CANVAS_WIDTH && mouseX >= 0 && mouseY < CANVAS_HEIGHT && mouseY >= 0)
+            {
+                var vectorStart = [-(mouseY-CANVAS_HEIGHT/2), mouseX - CANVAS_WIDTH/2, CANVAS_WIDTH * .6 * Math.sqrt(2)];
+                var vectorEnd = [-(mouseY-CANVAS_HEIGHT/2), mouseX - CANVAS_WIDTH/2, -10000];
+
+                vectorStart = multiMatix(yRotMat, vectorStart);
+                vectorEnd = multiMatix(yRotMat, vectorEnd);
+
+                vectorStart = multiMatix(xRotMat, vectorStart);
+                vectorEnd = multiMatix(xRotMat, vectorEnd);
+
+
+                var selectVector = new Vector(vectorStart[0], vectorStart[1], vectorStart[2], vectorEnd[0], vectorEnd[1], vectorEnd[2]);
+
+
+                var intersections = [];//holds all intersections
+
+
+                intersections.push(math.intersect(selectVector.getStartPoint(), selectVector.getEndPoint(), xzPlane));
+                intersections.push(math.intersect(selectVector.getStartPoint(), selectVector.getEndPoint(), xyPlane));
+                intersections.push(math.intersect(selectVector.getStartPoint(), selectVector.getEndPoint(), yzPlane));
+
+                var loc = intersections[0];//closest intersection
+                var locIsPoint = false;
+
+                for(var rep = 1; rep < intersections.length; rep++)
+                {
+                    if(distance(intersections[rep], vectorStart) < distance(loc, vectorStart))
+                    {
+                       loc = intersections[rep];
+                    }
+                }
+
+                for(var rep = 0; rep < points.length; rep++)
+                {
+                    if(distanceToPoint(vectorStart, vectorEnd, points[rep]) < 5)
+                    {
+                        loc = points[rep];
+                        locIsPoint = true;
+                        selectionIndex = rep;
+                    }
+                }
+
+                if(!locIsPoint)
+                {
+                    currentPoint = null;
+                    addPointAt(loc[0], loc[1], loc[2]);
+                }
+                else
+                {
+                    if(shiftDown)
+                    {
+
+                        removeLines(loc);
+                        points.splice(points.indexOf(loc), 1);
+                    }
+                    else
+                    {
+
+                        if(currentPoint == null)
+                        {
+                            currentPoint = loc;
+                            console.log(currentPoint);
+                            document.getElementById('selection').innerHTML = 'Current Selection:<br/>(' + loc[0].toFixed(2) + ', ' + loc[1].toFixed(2) + ', ' + loc[2].toFixed(2) + ')';
+                        }
+                        else
+                        {
+                            if(loc != currentPoint)
+                            {
+
+                                var point1 = [currentPoint[0], currentPoint[1], currentPoint[2]];
+
+                                var point2 = [loc[0], loc[1], loc[2]];
+
+                                lines.push(point1);
+                                lines.push(point2);
+
+                                currentPoint = null;
+                                clearSelection();
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+        function keyPressed()
+        {
+            if(keyCode == 16)
+            {
+               shiftDown = true;
+            }
+        }
+
+
+        function keyReleased()
+        {
+            if(keyCode == 16)
+            {
+               shiftDown = false;
+            }
+        }
+
+        function distanceToPoint(vectorP1, vectorP2, point)
+        {
+            var cross = math.cross([point[0] - vectorP1[0], point[1] - vectorP1[1], point[2] - vectorP1[2]], [point[0] - vectorP2[0], point[1] - vectorP2[1], point[2] - vectorP2[2]]);
+
+            var numerator = Math.abs(distance([0, 0, 0], cross));
+            var denominator = Math.abs(distance([0, 0, 0],[vectorP2[0] - vectorP1[0], vectorP2[1] - vectorP1[1], vectorP2[2] - vectorP1[2]]));
+
+            var pointDistance = numerator / denominator;
+
+            return pointDistance;
+        }
+
+        function mouseDragged()
+        {
+
+
+            //use middle mouse button
+            if(mouseButton == CENTER)
+            {
+            rotating = true;
+            hasAddedRotation = false;
+            var newPoint = [mouseX, mouseY];
+            var xChange = (newPoint[0] - lastPoint[0])*Math.PI*.01;//change from the start of the drag
+            var yChange = (newPoint[1] - lastPoint[1])*Math.PI*.01;//change from start of drag
+
+            xRotation = xChange;
+            yRotation = yChange;
+            }
+        }
+
+
+
+        function mouseReleased()
+        {
+            rotating = false;
+        }
+
+
+
+        function home()
+        {
+            xRotPos = X_ROT_START;
+            yRotPos = Y_ROT_START;
+        }
+
+        function drawPoints()
+        {
+            ambientMaterial(220);
+
+            for(var rep = 0; rep < points.length; rep++)
+            {
+
+                var currentPoint = points[rep];
+
+                translate(currentPoint[0], currentPoint[1], currentPoint[2]);
+                sphere(POINT_SIZE);
+                translate(-currentPoint[0], -currentPoint[1], -currentPoint[2]);
+            }
+        }
+
+        function addPointAt(x, y, z)
+        {
+            var xRotMat = [[1, 0, 0], [0, Math.cos(-xRotPos), -Math.sin(xRotPos)], [0, Math.sin(xRotPos), Math.cos(xRotPos)]];
+            var yRotMat = [[Math.cos(yRotPos), 0, Math.sin(yRotPos)], [0, 1, 0], [-Math.sin(yRotPos), 0, Math.cos(yRotPos)]];
+
+
+            var point = [x, y, z];[]
+
+
+
+            points.push(point);
+        }
+
+        function addPoint()
+        {
+            console.log(selectionIndex);
+            var yCoord = document.getElementById("x").value;
+            var zCoord = document.getElementById("y").value;
+            var xCoord = document.getElementById("z").value;
+
+            xCoord = (xCoord != "") ? parseFloat(xCoord) : 0;
+            yCoord = (yCoord != "") ? parseFloat(yCoord) : 0;
+            zCoord = (zCoord != "") ? parseFloat(zCoord) : 0;
+
+
+            if(selectionIndex != null)
+            {
+
+                for(var rep = 0; rep < lines.length; rep++)
+                {
+                    if(lines[rep][0] == points[selectionIndex][0] && lines[rep][1] == points[selectionIndex][1] && lines[rep][2] == points[selectionIndex][2])
+                    {
+                        lines[rep][0] = xCoord;
+                        lines[rep][1] = yCoord;
+                        lines[rep][2] = zCoord;
+                    }
+                }
+
+                points[selectionIndex][0] = xCoord;
+                points[selectionIndex][1] = yCoord;
+                points[selectionIndex][2] = zCoord;
+            }
+            else
+            {
+            //addPointAt(xCoord, yCoord, zCoord);
+
+            points.push([xCoord, yCoord, zCoord]);
+            }
+            clearSelection();
+        }
+
+        function clearScene()
+        {
+            points = [];
+            lines = [];
+        }
+
+        function multiMatix(mat1, mat2)
+        {
+            var newMat = [];
+            if(mat1[0].length == mat2.length)
+            {
+               for(var rep1 = 0; rep1 < mat1.length; rep1++)
+               {
+                    var value = 0;
+                    for(var rep2 = 0; rep2 < mat1[0].length; rep2++)
+                    {
+                        value += mat1[rep1][rep2] * mat2[rep2];
+                    }
+
+                   newMat.push(value);
+               }
+                return newMat;
+            }
+            else
+            {
+                console.log("Incorrect sizes");
+            }
+            return newMat;
+        }
+
+        function clearSelection()
+        {
+            currentPoint = null;
+            selectionIndex = null;
+            document.getElementById('selection').innerHTML = 'Current Selection:<br/>None';
+        }
+
+    </script>
+
+    <body>
+        <sp id = 'col'>Coordinates<br/>X: <input type = "text" id = "x"><br/>Y: <input type = "text" id = "y"><br/>Z: <input type = "text" id = "z"><br/><input type = "button" id = "addPoint" value = "Add Point" onclick="addPoint()"> </sp>
+        <input type = "button" id = "homeButton" onClick = "home()" value = "Reset View">
+        <input type = "button" id = "clearButton" onClick = "clearScene()" value = "Clear">
+        <sp id = 'instructions'>Instructions:<br/>•Click on a plane or enter coordinates into the X, Y, and Z boxes to add points<br/>•Shift click on a point to remove the point<br/>•Click one point after another to draw lines between points<br/>•Click Reset View to return to the original view<br/>•Click clear to remove all points<br/>•Current Selection shows the point you have selected<br/>•Click clear selection to clear the current selection</sp>
+        <sp id = 'selection'>Current Selection:<br/>None</sp>
+        <input type = 'button' value="Clear Selection" onclick="clearSelection()" id = 'clearSelection'>
+    </body>
+
+</html>
